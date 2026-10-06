@@ -50,7 +50,7 @@ const confirmBox = (title, text, ok = 'Yes, do it', danger = false) => new Promi
 const copy = async (text) => { await navigator.clipboard.writeText(text); toast('Copied'); };
 
 const S = { settings: null, page: 'chats', chatQuery: '', chatProject: '', chats: [], projects: [],
-  hist: { q: '', project: '', range: '', tool: '', chosen: false, sort: 'new', find: '', who: 'all' } };
+  hist: { q: '', project: '', range: '', tool: '', chosen: false, hidden: false, sort: 'new', find: '', who: 'all' } };
 
 const ICON = {
   chats: '<path d="M4 5h16v11H8l-4 4z"/>',
@@ -117,7 +117,7 @@ const Chats = {
     if (!box) return;
     const item = (c) => `<button class="chat-item ${c.id === active ? 'on' : ''}" data-id="${c.id}" title="${esc(c.about || c.title)}">
         <div class="t">${esc(c.title)}</div>
-        <div class="m"><span>${esc(short(c.cwd))}</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
+        <div class="m"><span>${esc(short(c.project || c.cwd))}</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
     box.innerHTML = S.chats.length ? dateGroups(S.chats).map(([label, list]) => `<section class="chat-group"><h5>${esc(label)}</h5>${list.map(item).join('')}</section>`).join('')
       : `<div class="empty">${S.chatQuery ? 'No chat matches.' : 'No Claude Code chats found. Check the folder in Settings.'}</div>`;
     $$('.chat-item', box).forEach((b) => { b.onclick = () => { location.hash = `#chats/${b.dataset.id}`; }; });
@@ -303,6 +303,7 @@ const History = {
         <select id="h-tool"><option value="">Any tools used</option></select>
         <select id="h-sort">${opts(SORTS, h.sort)}</select>
         <label class="h-check"><input type="checkbox" id="h-chosen" ${h.chosen ? 'checked' : ''}> Tools chosen</label>
+        <label class="h-check" title="Projects you hid, and ones with temporary or random folder names"><input type="checkbox" id="h-hidden" ${h.hidden ? 'checked' : ''}> Hidden projects</label>
         <button class="btn small" id="h-clear">Clear</button>
         <span class="count" id="h-count"></span>
       </div>
@@ -317,18 +318,23 @@ const History = {
     $('#h-tool').onchange = (e) => { h.tool = e.target.value; this.paintList(); };
     $('#h-sort').onchange = (e) => { h.sort = e.target.value; this.paintList(); };
     $('#h-chosen').onchange = (e) => { h.chosen = e.target.checked; this.paintList(); };
-    $('#h-clear').onclick = () => { Object.assign(h, { q: '', project: '', range: '', tool: '', chosen: false, sort: 'new', find: '' }); this.render(this.cur?.id); };
-    api('GET', '/api/projects').then((ps) => {
-      S.projects = ps;
-      $('#h-proj').innerHTML = `<option value="">All projects</option>${ps.map((p) => `<option value="${esc(p.cwd || p.folder)}" ${h.project === (p.cwd || p.folder) ? 'selected' : ''}>${esc(short(p.cwd || p.folder))} (${p.chats})</option>`).join('')}`;
-    }).catch(() => {});
+    $('#h-hidden').onchange = (e) => { h.hidden = e.target.checked; this.loadProjects(); this.load(); };
+    $('#h-clear').onclick = () => { Object.assign(h, { q: '', project: '', range: '', tool: '', chosen: false, hidden: false, sort: 'new', find: '' }); this.render(this.cur?.id); };
+    this.loadProjects();
     this.active = id;
     await this.load();
     if (id) this.select(id);
   },
+  loadProjects() {
+    const h = S.hist;
+    api('GET', `/api/projects?all=${h.hidden ? 1 : 0}`).then((ps) => {
+      if (h.project && !ps.some((p) => p.cwd === h.project)) h.project = '';
+      $('#h-proj').innerHTML = `<option value="">All projects</option>${ps.map((p) => `<option value="${esc(p.cwd)}" ${h.project === p.cwd ? 'selected' : ''}>${esc(short(p.cwd))} (${p.chats})${p.hidden ? ' · hidden' : ''}</option>`).join('')}`;
+    }).catch(() => {});
+  },
   async load() {
     const h = S.hist;
-    const q = new URLSearchParams({ q: h.q, project: h.project, full: '1' });
+    const q = new URLSearchParams({ q: h.q, project: h.project, full: '1', hidden: h.hidden ? '1' : '0' });
     this.all = await api('GET', `/api/chats?${q}`);
     // Tool filter choices come from what the loaded chats actually used.
     const used = new Set();
@@ -365,7 +371,7 @@ const History = {
     const row = (c) => `<button class="hist-item ${c.id === this.active ? 'on' : ''}" data-id="${c.id}">
         <div class="t">${hl(c.title, words)}</div>
         ${c.first_prompt && c.first_prompt !== c.title ? `<div class="p">${hl(c.first_prompt.split('\n')[0].slice(0, 160), words)}</div>` : ''}
-        <div class="m"><span class="f">${esc(short(c.cwd))}</span><span>${c.prompts + c.replies} msgs</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
+        <div class="m"><span class="f" title="${esc(c.cwd)}">${esc(short(c.project || c.cwd))}</span><span>${c.prompts + c.replies} msgs</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
     const groups = h.sort === 'new' ? dateGroups(list) : [[SORTS.find(([v]) => v === h.sort)[1], list]];
     box.innerHTML = list.length ? groups.map(([label, l]) => `<section class="chat-group"><h5>${esc(label)}</h5>${l.map(row).join('')}</section>`).join('')
       : `<div class="empty">${this.all.length ? 'No chat matches these filters.' : h.q ? 'No chat contains that.' : 'No Claude Code chats found. Check the folder in Settings.'}</div>`;
@@ -384,7 +390,7 @@ const History = {
         <div style="min-width:0"><h2>${esc(info.title)}</h2>
           <div class="sub mono" style="word-break:break-all">${esc(info.cwd)}${info.branch ? ` · ${esc(info.branch)}` : ''}</div>
           <div class="sub">${esc(new Date(info.started).toLocaleString())} → ${esc(when(info.updated))} · ${info.prompts} from you · ${info.replies} replies</div></div>
-        <div class="row" style="flex:none"><button class="btn small" id="h-copy">Copy text</button><a class="btn small" href="#chats/${esc(id)}">Choose tools →</a></div></div>
+        <div class="row" style="flex:none"><button class="btn small" id="h-hide" title="Hide every chat in ${esc(info.project || info.cwd)} from these lists. Nothing is deleted; show it again in Settings.">Hide project</button><button class="btn small" id="h-copy">Copy text</button><a class="btn small" href="#chats/${esc(id)}">Choose tools →</a></div></div>
       <div class="hist-find">
         <input type="text" id="h-find" placeholder="Find in this chat…" value="${esc(S.hist.find)}">
         <div class="seg" id="h-who">${[['all', 'All'], ['you', 'You'], ['claude', 'Claude']].map(([v, l]) => `<button data-v="${v}" class="${S.hist.who === v ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -392,6 +398,12 @@ const History = {
       <div class="hist-msgs" id="h-msgs"></div>`;
     $('#h-find').oninput = (e) => { S.hist.find = e.target.value; this.paintMsgs(); };
     $('#h-who').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.hist.who = b.dataset.v; $$('#h-who button').forEach((x) => x.classList.toggle('on', x === b)); this.paintMsgs(); };
+    $('#h-hide').onclick = run(async () => {
+      const proj = info.project || info.cwd || info.folder;
+      if (!(await confirmBox('Hide this project?', `Chats in ${proj} won't show in Chats or History. Nothing is deleted — show it again in Settings → Projects.`, 'Hide'))) return;
+      await api('POST', '/api/projects/hidden', { project: proj, hidden: true });
+      toast('Project hidden'); this.cur = null; this.active = null; location.hash = '#history';
+    });
     $('#h-copy').onclick = run(() => copy(this.cur.items.map((m) => `${m.role === 'you' ? 'You' : 'Claude'}: ${m.text}${m.tools?.length ? `\n[tools: ${m.tools.join(', ')}]` : ''}`).join('\n\n')));
     this.paintMsgs();
   },
@@ -732,8 +744,22 @@ const Settings = {
       <div class="card"><h2>What it reads and writes</h2><dl class="kv" style="margin-top:10px">
         <dt>Chats & skills</dt><dd>${esc(s.claude_dir_used)}</dd><dt>MCP config</dt><dd>${esc(s.claude_json_used)}</dd><dt>claude</dt><dd>${esc(s.claude_found)}</dd><dt>This app's data</dt><dd>${esc(s.data_dir)}</dd></dl>
         <ul class="sub" style="padding-left:18px;line-height:1.7;margin-top:14px"><li>Chats are only read, never changed.</li><li>Per-chat choices live in this app's data folder and apply when you open a chat from here.</li>
-        <li>It writes to Claude Code's files only when you press Connect, Disconnect or Make default — and keeps a <span class="mono">.tools-control.bak</span> copy.</li></ul></div></div>`;
+        <li>It writes to Claude Code's files only when you press Connect, Disconnect or Make default — and keeps a <span class="mono">.tools-control.bak</span> copy.</li></ul></div></div>
+      <div class="card" style="margin-top:14px"><div class="card-head"><div><h2>Projects</h2><div class="sub">Hidden projects and their chats are left out of Chats and History. Temporary folders, folders the Claude app makes and folders with random names are hidden automatically. Nothing is deleted.</div></div></div>
+        <div id="st-projects"><div class="hint">Reading your chats…</div></div></div>`;
+    this.paintProjects(await api('GET', '/api/projects?all=1'));
     $('#st-save').onclick = run(async () => { await api('POST', '/api/settings', { claude_dir: $('#st-dir').value.trim(), claude_exe: $('#st-exe').value.trim(), terminal: $('#st-term').value, summary_model: $('#st-model').value }); S.settings = await api('GET', '/api/settings'); renderNav(); toast('Saved'); });
+  },
+  paintProjects(ps) {
+    const box = $('#st-projects');
+    if (!box) return;
+    const hidden = ps.filter((p) => p.hidden).length;
+    box.innerHTML = ps.length ? `<p class="sub" style="margin:0 0 8px">${ps.length - hidden} shown · ${hidden} hidden</p><div class="table-wrap"><table><thead><tr><th>Project folder</th><th class="num">Chats</th><th>Last used</th><th></th></tr></thead><tbody>
+      ${ps.map((p) => `<tr class="${p.hidden ? 'proj-hidden' : ''}"><td><div class="mono" style="font-size:12px;word-break:break-all">${esc(p.cwd)}</div>${p.reason ? `<div class="hint">${esc(p.reason)}</div>` : ''}</td>
+        <td class="num">${p.chats}</td><td style="white-space:nowrap">${esc(when(p.updated))}</td>
+        <td style="text-align:right"><button class="btn small" data-p="${esc(p.cwd)}" data-h="${p.hidden ? 0 : 1}">${p.hidden ? 'Show' : 'Hide'}</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">No chats found.</div>';
+    $$('button[data-p]', box).forEach((b) => { b.onclick = run(async () => this.paintProjects(await api('POST', '/api/projects/hidden', { project: b.dataset.p, hidden: b.dataset.h === '1' }))); });
   },
 };
 

@@ -154,8 +154,67 @@ def _file_has(path: Path, words: list[str]) -> bool:
     return all(w in text for w in words)
 
 
-def list_sessions(query: str = "", project: str = "", full: bool = False) -> list[dict]:
-    """Chats newest first. `full` searches the whole transcript, not just the indexed sample."""
+# ---- projects: which folder a chat belongs to, and which folders to hide --------------------------------------
+
+_WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$", re.I)
+_RANDOM = re.compile(r"^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}|"
+                     r"(?=.*\d)(?=.*[a-z])[a-z0-9]{20,})$", re.I)
+_APP_DIRS = ("local-agent-mode-sessions", "appdata/roaming/claude/", "application support/claude/",
+             "/.claude/projects/", "/.config/claude/")
+
+
+def project_of(cwd: str, folder: str = "") -> str:
+    """The project a chat belongs to. A worktree (<repo>/.claude/worktrees/<name>) belongs to its repo."""
+    if not cwd:
+        return folder
+    return _WORKTREE.sub("", cwd.rstrip("\\/")) or cwd
+
+
+def junk_reason(cwd: str) -> str:
+    """Why a project folder looks machine-made rather than yours ('' = it looks like a real project)."""
+    if not cwd or ("/" not in cwd and "\\" not in cwd):  # no cwd: only Claude Code's encoded folder name
+        return "No folder was recorded"
+    path = cwd.replace("\\", "/").rstrip("/")
+    home = str(store.home()).replace("\\", "/").rstrip("/")
+    if path.lower().startswith(home.lower() + "/"):  # judge only the part inside your home folder
+        path = path[len(home):]
+    low = path.lower() + "/"
+    parts = [x for x in low.split("/") if x]
+    if any(x in ("tmp", "temp") for x in parts) or "/var/folders/" in low:
+        return "Temporary folder"
+    if any(d in low for d in _APP_DIRS):
+        return "Made by the Claude app"
+    if parts and _RANDOM.match(parts[-1]):
+        return "Random folder name"
+    return ""
+
+
+def _hidden_file() -> Path:
+    return store.DATA / "projects.json"
+
+
+def hidden_overrides() -> dict[str, bool]:
+    """Your own choices: {project: True (hide) | False (show even if it looks machine-made)}."""
+    return store.read_json(_hidden_file(), {}).get("hidden", {})
+
+
+def set_hidden(project: str, hidden: bool) -> dict[str, bool]:
+    data = store.read_json(_hidden_file(), {})
+    ov = data.setdefault("hidden", {})
+    ov[project] = bool(hidden)
+    store.write_json(_hidden_file(), data)
+    return ov
+
+
+def is_hidden(project: str, overrides: dict[str, bool] | None = None) -> bool:
+    ov = hidden_overrides() if overrides is None else overrides
+    return ov[project] if project in ov else bool(junk_reason(project))
+
+
+def list_sessions(query: str = "", project: str = "", full: bool = False, hidden: bool = False) -> list[dict]:
+    """Chats newest first. `full` searches the whole transcript, not just the indexed sample.
+    Chats in hidden projects are left out unless `hidden` is set or that project is asked for by name."""
+    overrides = hidden_overrides()
     with store.db() as c:
         cache = {r["path"]: (r["mtime"], r["size"], json.loads(r["data"]))
                  for r in c.execute("SELECT * FROM transcript_index")}
@@ -170,7 +229,10 @@ def list_sessions(query: str = "", project: str = "", full: bool = False) -> lis
                                     "replies", "skills_used", "mcp_used", "first_prompt", "size", "cost_usd")}
         row["about"] = prof.get("about") or ""
         row["has_profile"] = bool(prof.get("skills") is not None or prof.get("mcp") is not None)
-        if project and project not in (info["cwd"], info["folder"]):
+        row["project"] = project_of(info["cwd"], info["folder"])
+        if project and project not in (row["project"], info["cwd"], info["folder"]):
+            continue
+        if not hidden and not project and is_hidden(row["project"], overrides):
             continue
         if query:
             hay = " ".join([row["title"], row["cwd"], row["first_prompt"], row["about"], info["text_sample"]]).lower()
@@ -198,7 +260,10 @@ def get(session_id: str) -> dict | None:
     with store.db() as c:
         cache = {r["path"]: (r["mtime"], r["size"], json.loads(r["data"]))
                  for r in c.execute("SELECT * FROM transcript_index WHERE path=?", (str(p),))}
-    return _index(p, cache)
+    info = _index(p, cache)
+    if info:
+        info = {**info, "project": project_of(info["cwd"], info["folder"])}
+    return info
 
 
 def messages(session_id: str, offset: int = 0, limit: int = 60) -> dict:
@@ -245,11 +310,15 @@ def messages(session_id: str, offset: int = 0, limit: int = 60) -> dict:
     return {"total": total, "offset": offset, "items": items[offset:offset + limit]}
 
 
-def projects() -> list[dict]:
+def projects(include_hidden: bool = False) -> list[dict]:
+    """Projects newest first; `cwd` is the project's folder (worktrees folded into their repo)."""
+    overrides = hidden_overrides()
     seen: dict[str, dict] = {}
-    for s in list_sessions():
-        key = s["cwd"] or s["folder"]
-        e = seen.setdefault(key, {"cwd": s["cwd"], "folder": s["folder"], "chats": 0, "updated": ""})
+    for s in list_sessions(hidden=True):
+        key = s["project"]
+        e = seen.setdefault(key, {"cwd": key, "folder": s["folder"], "chats": 0, "updated": "",
+                                  "reason": junk_reason(key), "hidden": is_hidden(key, overrides)})
         e["chats"] += 1
         e["updated"] = max(e["updated"], s["updated"])
-    return sorted(seen.values(), key=lambda e: e["updated"], reverse=True)
+    out = [e for e in seen.values() if include_hidden or not e["hidden"]]
+    return sorted(out, key=lambda e: e["updated"], reverse=True)

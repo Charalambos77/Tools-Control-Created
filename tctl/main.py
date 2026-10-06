@@ -35,13 +35,23 @@ def _cwd_of(session_id: str) -> str:
 # ---- chats ----------------------------------------------------------------------------------------------
 
 @app.get("/api/chats")
-def chats(q: str = "", project: str = "", full: bool = False):
-    return sessions.list_sessions(q, project, full)
+def chats(q: str = "", project: str = "", full: bool = False, hidden: bool = False):
+    return sessions.list_sessions(q, project, full, hidden)
 
 
 @app.get("/api/projects")
-def projects():
-    return sessions.projects()
+def projects(all: bool = False):
+    return sessions.projects(include_hidden=all)
+
+
+@app.post("/api/projects/hidden")
+def project_hidden(body: dict = Body(...)):
+    """Hide a project (and its chats) from the lists, or show it again. Nothing on disk is touched."""
+    project = str(body.get("project") or "")
+    if not project:
+        bad(ValueError("Which project?"))
+    sessions.set_hidden(project, bool(body.get("hidden", True)))
+    return sessions.projects(include_hidden=True)
 
 
 @app.get("/api/chats/{sid}")

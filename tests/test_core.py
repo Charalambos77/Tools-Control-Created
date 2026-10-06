@@ -48,6 +48,25 @@ def test_full_search_reads_whole_transcript(demo):
     assert [s["id"] for s in sessions.list_sessions("zanzibar", full=True)] == ["deep"]
 
 
+def test_machine_made_projects_are_hidden(demo):
+    root = store.claude_dir() / "projects"
+    line = ('{"type":"user","message":{"content":"hi"},"cwd":%s,"timestamp":"2026-10-01T00:00:00Z"}\n')
+    for name, cwd in [("tmpchat", "/tmp/claude-x1"), ("uuidchat", "/w/3f2a9c1e-1111-2222-3333-444455556666"),
+                      ("wtchat", "/w/shop/.claude/worktrees/brave-turing-1a2b"), ("realchat", "/w/shop")]:
+        (root / name).mkdir(parents=True)
+        (root / name / f"{name}.jsonl").write_text(line % json.dumps(cwd))
+    ids = {s["id"] for s in sessions.list_sessions()}
+    assert {"wtchat", "realchat"} <= ids and not {"tmpchat", "uuidchat"} & ids
+    assert {s["id"] for s in sessions.list_sessions(project="/w/shop")} == {"wtchat", "realchat"}
+    projs = {p["cwd"]: p for p in sessions.projects(include_hidden=True)}
+    assert projs["/w/shop"]["chats"] == 2 and projs["/tmp/claude-x1"]["hidden"]
+    sessions.set_hidden("/w/shop", True)
+    sessions.set_hidden("/tmp/claude-x1", False)
+    ids = {s["id"] for s in sessions.list_sessions()}
+    assert "tmpchat" in ids and "realchat" not in ids
+    assert "realchat" in {s["id"] for s in sessions.list_sessions(hidden=True)}
+
+
 def test_skill_discovery(demo):
     cwd = chat("Instagram")["cwd"]
     all_ = {s["invoke"]: s for s in skills.all_skills(cwd)}

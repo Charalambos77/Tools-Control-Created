@@ -22,6 +22,8 @@ You need Python 3.10+ and Claude Code (`claude`) installed. It reads `%USERPROFI
 
 ## Pages
 
+Projects that aren't really yours are hidden from Chats and History: temporary folders, folders the Claude app makes for its own sessions, folders with random names (a UUID or a long code), and chats with no folder recorded. Chats in a worktree (`<repo>/.claude/worktrees/<name>`) are listed under their repo. You can hide any other project with **Hide project** on the History page, or show a hidden one again under **Settings → Projects**. Nothing is deleted; the choices are kept in `data/projects.json`. Tick **Hidden projects** on the History page to see their chats.
+
 | Page | What it's for |
 | --- | --- |
 | **Chats** | Every Claude Code conversation on the PC, grouped by date like Claude's sidebar (Today, Yesterday, Previous 7 days, …), searchable and filterable by project. |
@@ -30,7 +32,7 @@ You need Python 3.10+ and Claude Code (`claude`) installed. It reads `%USERPROFI
 | **MCP servers** | Every MCP server Claude Code knows about: user, this folder, a project's `.mcp.json`, plugins and the library. |
 | **Create** | Build a new MCP server. |
 | **SDK & connect** | Connect Tools Control to Claude as an MCP server, or use the Python SDK, the Claude Agent SDK or the command line. |
-| **Settings** | Where your Claude Code files are, the `claude` program, which terminal **Open** uses, and the model used for summaries. |
+| **Settings** | Where your Claude Code files are, the `claude` program, which terminal **Open** uses, the model used for summaries, and which **projects** to hide. |
 
 On the **Chats** page, opening a chat shows:
 - **What it's about**: your own description, plus **Ask Claude**, which reads the chat, summarises it and suggests tools. It also tells you about useful tools you don't have yet.
@@ -121,5 +123,5 @@ The UI is `static/`: plain HTML, CSS and JS with no build step.
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt pytest
-.venv/bin/python -m pytest -q          # 23 tests (demo setup, real MCP servers over stdio, SDK + CLI)
+.venv/bin/python -m pytest -q          # 24 tests (demo setup, real MCP servers over stdio, SDK + CLI)
 ```

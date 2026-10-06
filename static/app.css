@@ -310,3 +310,5 @@ mark { background: #f6c44555; color: inherit; border-radius: 3px; padding: 0 1px
   .hist { grid-template-columns: 1fr; }
   .hist-list, .hist-read { max-height: none; position: static; }
 }
+tr.proj-hidden td { color: var(--dim); }
+tr.proj-hidden .mono { text-decoration: line-through; text-decoration-color: var(--line2); }
