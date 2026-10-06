@@ -35,8 +35,8 @@ def _cwd_of(session_id: str) -> str:
 # ---- chats ----------------------------------------------------------------------------------------------
 
 @app.get("/api/chats")
-def chats(q: str = "", project: str = ""):
-    return sessions.list_sessions(q, project)
+def chats(q: str = "", project: str = "", full: bool = False):
+    return sessions.list_sessions(q, project, full)
 
 
 @app.get("/api/projects")

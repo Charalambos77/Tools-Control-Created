@@ -25,6 +25,7 @@ You need Python 3.10+ and Claude Code (`claude`) installed. It reads `%USERPROFI
 | Page | What it's for |
 | --- | --- |
 | **Chats** | Every Claude Code conversation on the PC, grouped by date like Claude's sidebar (Today, Yesterday, Previous 7 days, …), searchable and filterable by project. |
+| **History** | Just the chat history. Filter by words anywhere in a chat (your messages and Claude's), project, date, tools used, and chats you've chosen tools for. Then read the whole conversation, find words inside it, or show only your messages or only Claude's. |
 | **Skills** | Every skill Claude Code can use: yours, the project's, plugin skills, built-in ones (press **Ask Claude which skills it has**) and the library. You can read and edit them, copy them between places, delete them (they go to a trash folder), or create a new one. |
 | **MCP servers** | Every MCP server Claude Code knows about: user, this folder, a project's `.mcp.json`, plugins and the library. |
 | **Create** | Build a new MCP server. |
@@ -120,5 +121,5 @@ The UI is `static/`: plain HTML, CSS and JS with no build step.
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt pytest
-.venv/bin/python -m pytest -q          # 22 tests (demo setup, real MCP servers over stdio, SDK + CLI)
+.venv/bin/python -m pytest -q          # 23 tests (demo setup, real MCP servers over stdio, SDK + CLI)
 ```

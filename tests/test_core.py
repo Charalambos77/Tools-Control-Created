@@ -37,6 +37,17 @@ def test_bad_lines_are_skipped(demo, tmp_path):
     assert any(s["id"] == "abc" for s in sessions.list_sessions())
 
 
+def test_full_search_reads_whole_transcript(demo):
+    folder = store.claude_dir() / "projects" / "x"
+    folder.mkdir(parents=True)
+    (folder / "deep.jsonl").write_text(
+        '{"type":"user","message":{"content":"hello there"},"cwd":"/x","timestamp":"2026-10-01T00:00:00Z"}\n'
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"the zanzibar answer"}]},'
+        '"cwd":"/x","timestamp":"2026-10-01T00:01:00Z"}\n')
+    assert not sessions.list_sessions("zanzibar")
+    assert [s["id"] for s in sessions.list_sessions("zanzibar", full=True)] == ["deep"]
+
+
 def test_skill_discovery(demo):
     cwd = chat("Instagram")["cwd"]
     all_ = {s["invoke"]: s for s in skills.all_skills(cwd)}

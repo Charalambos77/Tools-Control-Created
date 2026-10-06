@@ -49,17 +49,19 @@ const confirmBox = (title, text, ok = 'Yes, do it', danger = false) => new Promi
 });
 const copy = async (text) => { await navigator.clipboard.writeText(text); toast('Copied'); };
 
-const S = { settings: null, page: 'chats', chatQuery: '', chatProject: '', chats: [], projects: [] };
+const S = { settings: null, page: 'chats', chatQuery: '', chatProject: '', chats: [], projects: [],
+  hist: { q: '', project: '', range: '', tool: '', chosen: false, sort: 'new', find: '', who: 'all' } };
 
 const ICON = {
   chats: '<path d="M4 5h16v11H8l-4 4z"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   skills: '<path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.8z"/>',
   mcp: '<path d="M8 7V3M16 7V3M6 7h12v5a6 6 0 0 1-12 0zM12 18v3"/>',
   create: '<path d="M12 5v14M5 12h14"/>',
   sdk: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
 };
-const PAGES = [['chats', 'Chats'], ['skills', 'Skills'], ['mcp', 'MCP servers'], ['create', 'Create'], ['sdk', 'SDK & connect'], ['settings', 'Settings']];
+const PAGES = [['chats', 'Chats'], ['history', 'History'], ['skills', 'Skills'], ['mcp', 'MCP servers'], ['create', 'Create'], ['sdk', 'SDK & connect'], ['settings', 'Settings']];
 
 function renderNav() {
   $('#nav').innerHTML = PAGES.map(([k, l]) => `<a href="#${k}" class="${S.page === k ? 'on' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>${l}</a>`).join('');
@@ -272,6 +274,143 @@ function commandModal(c, message) {
     $('[data-x]', m).onclick = closeModal;
   }, true);
 }
+
+// =========================================================================================================
+// History: every chat with filters, and the whole conversation to read. Nothing to configure here.
+// =========================================================================================================
+
+const DAY_MS = 864e5;
+const RANGES = [['', 'Any time'], ['1', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days'], ['90', 'Last 3 months'], ['365', 'Last year']];
+const SORTS = [['new', 'Newest first'], ['old', 'Oldest first'], ['long', 'Longest first']];
+const escRe = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Escape `text` and wrap every match of the search words in <mark>.
+function hl(text, words) {
+  if (!words.length) return esc(text);
+  const re = new RegExp(`(${words.map(escRe).join('|')})`, 'gi');
+  return String(text).split(re).map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part))).join('');
+}
+
+const History = {
+  all: [],
+  async render(id) {
+    const h = S.hist;
+    const opts = (list, cur) => list.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    $('#page').innerHTML = `<div class="page-head"><div><h1>History</h1><p>Every Claude Code conversation on this PC. Filter the list, then read the whole chat.</p></div></div>
+      <div class="hist-filters card">
+        <input type="text" id="h-q" class="h-search" placeholder="Search every message in every chat…" value="${esc(h.q)}">
+        <select id="h-proj"><option value="">All projects</option></select>
+        <select id="h-range">${opts(RANGES, h.range)}</select>
+        <select id="h-tool"><option value="">Any tools used</option></select>
+        <select id="h-sort">${opts(SORTS, h.sort)}</select>
+        <label class="h-check"><input type="checkbox" id="h-chosen" ${h.chosen ? 'checked' : ''}> Tools chosen</label>
+        <button class="btn small" id="h-clear">Clear</button>
+        <span class="count" id="h-count"></span>
+      </div>
+      <div class="hist">
+        <div class="hist-list" id="h-list"><div class="hint">Reading your chats…</div></div>
+        <div class="hist-read card" id="h-read"><div class="empty">Pick a chat to read it.</div></div>
+      </div>`;
+    let t;
+    $('#h-q').oninput = (e) => { h.q = e.target.value; h.find = h.q; clearTimeout(t); t = setTimeout(() => this.load(), 300); };
+    $('#h-proj').onchange = (e) => { h.project = e.target.value; this.load(); };
+    $('#h-range').onchange = (e) => { h.range = e.target.value; this.paintList(); };
+    $('#h-tool').onchange = (e) => { h.tool = e.target.value; this.paintList(); };
+    $('#h-sort').onchange = (e) => { h.sort = e.target.value; this.paintList(); };
+    $('#h-chosen').onchange = (e) => { h.chosen = e.target.checked; this.paintList(); };
+    $('#h-clear').onclick = () => { Object.assign(h, { q: '', project: '', range: '', tool: '', chosen: false, sort: 'new', find: '' }); this.render(this.cur?.id); };
+    api('GET', '/api/projects').then((ps) => {
+      S.projects = ps;
+      $('#h-proj').innerHTML = `<option value="">All projects</option>${ps.map((p) => `<option value="${esc(p.cwd || p.folder)}" ${h.project === (p.cwd || p.folder) ? 'selected' : ''}>${esc(short(p.cwd || p.folder))} (${p.chats})</option>`).join('')}`;
+    }).catch(() => {});
+    this.active = id;
+    await this.load();
+    if (id) this.select(id);
+  },
+  async load() {
+    const h = S.hist;
+    const q = new URLSearchParams({ q: h.q, project: h.project, full: '1' });
+    this.all = await api('GET', `/api/chats?${q}`);
+    // Tool filter choices come from what the loaded chats actually used.
+    const used = new Set();
+    for (const c of this.all) { c.skills_used.forEach((x) => used.add(`skill:${x}`)); c.mcp_used.forEach((x) => used.add(`mcp:${x}`)); }
+    if (h.tool && !used.has(h.tool)) used.add(h.tool);
+    const sel = $('#h-tool');
+    if (sel) sel.innerHTML = `<option value="">Any tools used</option>${[...used].sort().map((k) => `<option value="${esc(k)}" ${h.tool === k ? 'selected' : ''}>${esc(k.startsWith('skill:') ? `Skill: ${k.slice(6)}` : `MCP: ${k.slice(4)}`)}</option>`).join('')}`;
+    this.paintList();
+  },
+  filtered() {
+    const h = S.hist;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const since = h.range ? today.getTime() - (Number(h.range) - 1) * DAY_MS : 0;
+    const list = this.all.filter((c) => {
+      if (since && !(new Date(c.updated).getTime() >= since)) return false;
+      if (h.chosen && !c.has_profile) return false;
+      if (h.tool) {
+        const [kind, name] = [h.tool.slice(0, h.tool.indexOf(':')), h.tool.slice(h.tool.indexOf(':') + 1)];
+        if (!(kind === 'skill' ? c.skills_used : c.mcp_used).includes(name)) return false;
+      }
+      return true;
+    });
+    if (h.sort === 'old') list.reverse();
+    if (h.sort === 'long') list.sort((a, b) => (b.prompts + b.replies) - (a.prompts + a.replies));
+    return list;
+  },
+  paintList() {
+    const box = $('#h-list');
+    if (!box) return;
+    const h = S.hist;
+    const list = this.filtered();
+    const words = h.q.trim().split(/\s+/).filter(Boolean);
+    $('#h-count').textContent = `${list.length} of ${this.all.length} chat${this.all.length === 1 ? '' : 's'}`;
+    const row = (c) => `<button class="hist-item ${c.id === this.active ? 'on' : ''}" data-id="${c.id}">
+        <div class="t">${hl(c.title, words)}</div>
+        ${c.first_prompt && c.first_prompt !== c.title ? `<div class="p">${hl(c.first_prompt.split('\n')[0].slice(0, 160), words)}</div>` : ''}
+        <div class="m"><span class="f">${esc(short(c.cwd))}</span><span>${c.prompts + c.replies} msgs</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
+    const groups = h.sort === 'new' ? dateGroups(list) : [[SORTS.find(([v]) => v === h.sort)[1], list]];
+    box.innerHTML = list.length ? groups.map(([label, l]) => `<section class="chat-group"><h5>${esc(label)}</h5>${l.map(row).join('')}</section>`).join('')
+      : `<div class="empty">${this.all.length ? 'No chat matches these filters.' : h.q ? 'No chat contains that.' : 'No Claude Code chats found. Check the folder in Settings.'}</div>`;
+    $$('.hist-item', box).forEach((b) => { b.onclick = () => { location.hash = `#history/${b.dataset.id}`; }; });
+  },
+  async select(id) {
+    this.active = id;
+    $$('.hist-item').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+    const box = $('#h-read');
+    box.innerHTML = '<div class="hint">Loading…</div>';
+    const [d, msgs] = await Promise.all([api('GET', `/api/chats/${id}`), api('GET', `/api/chats/${id}/messages?limit=100000`)]);
+    if (this.active !== id) return;
+    this.cur = { id, info: d.info, items: msgs.items };
+    const info = d.info;
+    box.innerHTML = `<div class="hist-head">
+        <div style="min-width:0"><h2>${esc(info.title)}</h2>
+          <div class="sub mono" style="word-break:break-all">${esc(info.cwd)}${info.branch ? ` · ${esc(info.branch)}` : ''}</div>
+          <div class="sub">${esc(new Date(info.started).toLocaleString())} → ${esc(when(info.updated))} · ${info.prompts} from you · ${info.replies} replies</div></div>
+        <div class="row" style="flex:none"><button class="btn small" id="h-copy">Copy text</button><a class="btn small" href="#chats/${esc(id)}">Choose tools →</a></div></div>
+      <div class="hist-find">
+        <input type="text" id="h-find" placeholder="Find in this chat…" value="${esc(S.hist.find)}">
+        <div class="seg" id="h-who">${[['all', 'All'], ['you', 'You'], ['claude', 'Claude']].map(([v, l]) => `<button data-v="${v}" class="${S.hist.who === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <span class="count" id="h-found"></span></div>
+      <div class="hist-msgs" id="h-msgs"></div>`;
+    $('#h-find').oninput = (e) => { S.hist.find = e.target.value; this.paintMsgs(); };
+    $('#h-who').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.hist.who = b.dataset.v; $$('#h-who button').forEach((x) => x.classList.toggle('on', x === b)); this.paintMsgs(); };
+    $('#h-copy').onclick = run(() => copy(this.cur.items.map((m) => `${m.role === 'you' ? 'You' : 'Claude'}: ${m.text}${m.tools?.length ? `\n[tools: ${m.tools.join(', ')}]` : ''}`).join('\n\n')));
+    this.paintMsgs();
+  },
+  paintMsgs() {
+    const box = $('#h-msgs');
+    if (!box || !this.cur) return;
+    const words = S.hist.find.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const who = S.hist.who;
+    const shown = this.cur.items.filter((m) => (who === 'all' || m.role === who)
+      && (!words.length || words.every((w) => `${m.text} ${(m.tools || []).join(' ')}`.toLowerCase().includes(w))));
+    $('#h-found').textContent = words.length || who !== 'all' ? `${shown.length} of ${this.cur.items.length} messages` : `${this.cur.items.length} messages`;
+    box.innerHTML = shown.map((m) => `<div class="hmsg ${m.role}"><div class="who">${m.role === 'you' ? 'You' : 'Claude'}${m.time ? `<span>${esc(new Date(m.time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>` : ''}</div>
+        ${m.text ? `<div class="txt">${hl(m.text, words)}</div>` : ''}
+        ${m.tools?.length ? `<div class="tools">${m.tools.map((t) => `<span>${hl(t, words)}</span>`).join('')}</div>` : ''}</div>`).join('')
+      || `<div class="empty">${this.cur.items.length ? 'No message matches.' : 'This chat has no messages.'}</div>`;
+    const first = $('mark', box);
+    if (first) first.scrollIntoView({ block: 'center' }); else box.scrollTop = 0;
+  },
+};
 
 // =========================================================================================================
 // Skills
@@ -600,7 +739,7 @@ const Settings = {
 
 // ---- routing ---------------------------------------------------------------------------------------------
 
-const VIEWS = { chats: Chats, skills: Skills, mcp: Mcp, create: Create, sdk: Sdk, settings: Settings };
+const VIEWS = { chats: Chats, history: History, skills: Skills, mcp: Mcp, create: Create, sdk: Sdk, settings: Settings };
 
 async function route() {
   if (Chats.cur && Object.keys(Chats.pending).length) await Chats.flush().catch(() => {});
@@ -610,6 +749,7 @@ async function route() {
   $('#page').onclick = null;
   renderNav();
   if (S.page === 'chats' && $('#c-list') && S.lastPage === 'chats' && arg) { S.lastPage = 'chats'; Chats.detail(arg).catch((e) => toast(e.message, true)); return; }
+  if (S.page === 'history' && $('#h-list') && S.lastPage === 'history' && arg) { History.select(arg).catch((e) => toast(e.message, true)); return; }
   S.lastPage = S.page;
   try { await VIEWS[S.page].render(arg); } catch (e) { $('#page').innerHTML = `<div class="alert bad">${esc(e.message)}</div>`; }
 }

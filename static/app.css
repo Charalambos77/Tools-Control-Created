@@ -177,6 +177,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
 .seg button.on { background: var(--panel2); color: var(--text); box-shadow: 0 0 0 1px var(--line2); }
 
 .btn {
+  text-decoration: none;
   border: 1px solid var(--line2); background: var(--panel2); color: var(--text);
   padding: 7px 13px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px;
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -274,3 +275,38 @@ textarea.code { min-height: 260px; font-size: 12px; line-height: 1.5; tab-size: 
 .ok-text { color: #6ef0a0; }
 .bad-text { color: var(--bad); }
 .count { font: 12px var(--mono); color: var(--muted); }
+
+/* ---- History ---- */
+.hist-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; margin-bottom: 14px; }
+.hist-filters select { width: auto; max-width: 220px; }
+.hist-filters .h-search { flex: 1 1 280px; width: auto; }
+.h-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.hist-filters .count { margin-left: auto; }
+.hist { display: grid; grid-template-columns: 400px 1fr; gap: 14px; align-items: start; }
+.hist-list { display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 210px); overflow-y: auto; padding-right: 2px; }
+.hist-item { text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); width: 100%; }
+.hist-item:hover { background: var(--panel2); }
+.hist-item.on { background: var(--panel2); box-shadow: inset 2px 0 0 var(--accent); }
+.hist-item .t { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-item .p { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-item .m { font-size: 11px; color: var(--dim); margin-top: 3px; display: flex; gap: 8px; white-space: nowrap; overflow: hidden; }
+.hist-item .m .f { overflow: hidden; text-overflow: ellipsis; }
+.hist-read { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 210px); position: sticky; top: 12px; }
+.hist-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.hist-head h2 { font-size: 18px; margin: 0 0 4px; }
+.hist-find { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hist-find input { flex: 1 1 220px; width: auto; }
+.hist-msgs { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; flex: 1; padding-right: 4px; }
+.hmsg { padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); font-size: 13px; }
+.hmsg.you { background: #141a33; border-color: #263063; }
+.hmsg.claude { background: var(--panel2); }
+.hmsg .who { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px; display: flex; gap: 10px; }
+.hmsg .who span { font-weight: 400; color: var(--dim); }
+.hmsg .txt { white-space: pre-wrap; word-break: break-word; }
+.hmsg .tools { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.hmsg .tools span { font: 11px var(--mono); background: var(--bg); border: 1px solid var(--line2); padding: 1px 6px; border-radius: 5px; color: var(--muted); }
+mark { background: #f6c44555; color: inherit; border-radius: 3px; padding: 0 1px; }
+@media (max-width: 1000px) {
+  .hist { grid-template-columns: 1fr; }
+  .hist-list, .hist-read { max-height: none; position: static; }
+}

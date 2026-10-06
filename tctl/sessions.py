@@ -146,7 +146,16 @@ def files() -> list[Path]:
     return [p for p in root.glob("*/*.jsonl") if p.is_file()]
 
 
-def list_sessions(query: str = "", project: str = "") -> list[dict]:
+def _file_has(path: Path, words: list[str]) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+    return all(w in text for w in words)
+
+
+def list_sessions(query: str = "", project: str = "", full: bool = False) -> list[dict]:
+    """Chats newest first. `full` searches the whole transcript, not just the indexed sample."""
     with store.db() as c:
         cache = {r["path"]: (r["mtime"], r["size"], json.loads(r["data"]))
                  for r in c.execute("SELECT * FROM transcript_index")}
@@ -165,7 +174,8 @@ def list_sessions(query: str = "", project: str = "") -> list[dict]:
             continue
         if query:
             hay = " ".join([row["title"], row["cwd"], row["first_prompt"], row["about"], info["text_sample"]]).lower()
-            if not all(w in hay for w in query.lower().split()):
+            words = query.lower().split()
+            if not all(w in hay for w in words) and not (full and _file_has(p, words)):
                 continue
         out.append(row)
     out.sort(key=lambda r: r["updated"], reverse=True)
