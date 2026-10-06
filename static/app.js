@@ -71,6 +71,25 @@ function renderNav() {
 // Chats
 // =========================================================================================================
 
+// Group chats like Claude's sidebar: Today, Yesterday, Previous 7 days, Previous 30 days, then by month.
+function dateGroups(chats) {
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const today = day.getTime(), DAY = 864e5;
+  const label = (ts) => {
+    const d = new Date(ts);
+    if (!ts || isNaN(d)) return 'Older';
+    const t = d.getTime();
+    if (t >= today) return 'Today';
+    if (t >= today - DAY) return 'Yesterday';
+    if (t >= today - 7 * DAY) return 'Previous 7 days';
+    if (t >= today - 30 * DAY) return 'Previous 30 days';
+    return d.toLocaleDateString([], d.getFullYear() === day.getFullYear() ? { month: 'long' } : { month: 'long', year: 'numeric' });
+  };
+  const groups = new Map();
+  for (const c of chats) { const k = label(c.updated); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
+  return [...groups];
+}
+
 const Chats = {
   async render(id) {
     $('#page').innerHTML = `<div class="split">
@@ -94,10 +113,10 @@ const Chats = {
     S.chats = await api('GET', `/api/chats?${q}`);
     const box = $('#c-list');
     if (!box) return;
-    box.innerHTML = S.chats.length ? S.chats.map((c) => `<button class="chat-item ${c.id === active ? 'on' : ''}" data-id="${c.id}">
+    const item = (c) => `<button class="chat-item ${c.id === active ? 'on' : ''}" data-id="${c.id}" title="${esc(c.about || c.title)}">
         <div class="t">${esc(c.title)}</div>
-        <div class="m"><span>${esc(when(c.updated))}</span><span>${esc(short(c.cwd))}</span><span>${c.prompts} msgs</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div>
-        ${c.about ? `<div class="m" style="color:#c9d0ff">${esc(c.about.slice(0, 110))}</div>` : ''}</button>`).join('')
+        <div class="m"><span>${esc(short(c.cwd))}</span><span>${esc(when(c.updated))}</span>${c.has_profile ? '<span class="pill">tools chosen</span>' : ''}</div></button>`;
+    box.innerHTML = S.chats.length ? dateGroups(S.chats).map(([label, list]) => `<section class="chat-group"><h5>${esc(label)}</h5>${list.map(item).join('')}</section>`).join('')
       : `<div class="empty">${S.chatQuery ? 'No chat matches.' : 'No Claude Code chats found. Check the folder in Settings.'}</div>`;
     $$('.chat-item', box).forEach((b) => { b.onclick = () => { location.hash = `#chats/${b.dataset.id}`; }; });
   },
