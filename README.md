@@ -8,12 +8,12 @@ Choose which **skills** and **MCP servers** Claude Code uses for each conversati
 
 You can also connect MCP servers, test them, and create new MCP servers and skills. Claude can write the code for them. Tools Control can also be driven by Claude itself (through its own MCP server), by your own scripts (a Python SDK, which also works with the Claude Agent SDK), or from the command line.
 
-It lives in this repo next to Graphics Control because the session couldn't create a new repository. It doesn't depend on anything else here, so the folder can move to its own repo as is.
+Get it: `git clone https://github.com/Charalambos77/Tools-Control-Created.git` (a standalone app; its sister app is [Graphics-Control](https://github.com/Charalambos77/Graphics-Control)).
 
 ## Start
 
 ```powershell
-cd tools-control
+cd Tools-Control-Created
 .\start.ps1            # opens http://127.0.0.1:8450
 .\start.ps1 -Demo      # pretend chats, skills and MCP servers (your real setup is not touched)
 ```
