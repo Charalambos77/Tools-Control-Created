@@ -97,7 +97,7 @@ def ensure() -> None:
     store.write_json(home / ".claude.json", {
         "mcpServers": {
             "github": {"type": "http", "url": "https://api.githubcopilot.com/mcp/",
-                       "headers": {"Authorization": "Bearer ghp_demo_token_1234"}},
+                       "headers": {"Authorization": "Bearer demo-token-not-real-1234"}},
             "playwright": {"command": "npx", "args": ["@playwright/mcp@latest"]},
         },
         "projects": {str(proj).replace("\\", "/"): {"mcpServers": {

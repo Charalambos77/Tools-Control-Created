@@ -73,7 +73,7 @@ def test_mcp_discovery_and_mask(demo):
     assert {"user/github", "user/playwright", "local/agency", "project/supabase", "library/bakery-notes"} <= set(ids)
     assert ids["project/supabase"]["approved"] is False
     masked = mcp.mask(ids["user/github"]["config"])
-    assert "ghp_demo" not in json.dumps(masked) and masked["headers"]["Authorization"].endswith("1234")
+    assert "demo-token-not-real" not in json.dumps(masked) and masked["headers"]["Authorization"].endswith("1234")
 
 
 def test_mcp_library_import_install(demo):
@@ -162,7 +162,7 @@ def test_launch_files(demo):
     assert add.endswith("skills")
     m = store.read_json(a[a.index("--mcp-config") + 1], {})["mcpServers"]
     assert set(m) == {"bakery-notes", "github"}
-    assert m["github"]["headers"]["Authorization"] == "Bearer ghp_demo_token_1234"  # real value, not masked
+    assert m["github"]["headers"]["Authorization"] == "Bearer demo-token-not-real-1234"  # real value, not masked
     assert any("no longer exists" in n for n in cmd["notes"])
     assert cmd["powershell"].startswith("Set-Location ") and "--resume" in cmd["shell"]
 

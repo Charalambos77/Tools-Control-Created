@@ -46,7 +46,7 @@ def test_skill_endpoints(client):
 def test_mcp_endpoints(client):
     lst = client.get("/api/mcp").json()
     assert any(s["id"] == "library/bakery-notes" for s in lst)
-    assert "ghp_demo" not in json.dumps(lst)
+    assert "demo-token-not-real" not in json.dumps(lst)
     r = client.post("/api/mcp/test", json={"id": "library/bakery-notes"}).json()
     assert r["ok"] and len(r["tools"]) == 2
     out = client.post("/api/mcp/call", json={"id": "library/bakery-notes", "tool": "add_note",
